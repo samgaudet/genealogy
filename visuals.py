@@ -7,19 +7,28 @@ from pydantic import BaseModel
 from pygsuite import Clients, Spreadsheet
 
 
-SHEET_ID = "xxx"
+SHEET_ID = "1WZJWZ8PwOesDfsB2ltd2AUNLsUHXQGGEVr2ETozEcPE"
 
 
-Clients.local_file_auth(
-    r"xxx"
-)
+with open(
+    r"C:\Users\sgaud\git\genealogy\sheets_sa_credentials.json", "r"
+) as cred_file:
+    print(cred_file.read())
+    import json
+    test = json.loads(cred_file.read())
+    print(type(test))
+    from pprint import pprint
+    pprint(test)
+    Clients.authorize_string(cred_file.read())
+# Clients.local_file_auth(
+#     r"C:\Users\sgaud\git\genealogy\sheets_sa_credentials.json"
+# )
 
 
 class Ancestor(BaseModel):
     """Basic model to represent an ancestor and their information."""
-
     node_id: int
-    name: str
+    full_name: str
     born: int
     parents: Optional[List[int]] = None
     relationships: Optional[List[int]] = None
@@ -82,7 +91,7 @@ def define_nodes(graph: nx.Graph, ancestors: List[Ancestor]):
     graph.add_nodes_from(nodes)
 
 
-def define_edges(graph: nx.Graph, ancestors: List[Ancestor]):
+def define_parental_edges(graph: nx.Graph, ancestors: List[Ancestor]):
     """Iteratively define edges for every ancestor.
 
     Args:
@@ -93,21 +102,41 @@ def define_edges(graph: nx.Graph, ancestors: List[Ancestor]):
     for ancestor in ancestors:
         parents = ancestor.parents
         for parent in parents:
-            edges.append((ancestor.node_id, parent))
+            edges.append((parent, ancestor.node_id))
 
-    graph.add_edges_from(edges)
+    graph.add_edges_from(edges, relationship="parent")
+
+
+def define_relationship_edges(graph: nx.Graph, ancestors: List[Ancestor]):
+    """Iteratively define the edges for every relationship.
+
+    Args:
+        graph (nx.Graph):
+        ancestors (List[Ancestor]):
+    """
+    edges = []
+    for ancestor in ancestors:
+        relationships = ancestor.relationships
+        for relationship in relationships:
+            edges.append((relationship, ancestor.node_id))
+
+    graph.add_edges_from(edges, relationship="partner")
 
 
 ancestors = get_ancestors_from_sheet(SHEET_ID)
 for ancestor in ancestors:
     print(ancestor)
 
-G = nx.Graph()
+G = nx.DiGraph()
 
 define_nodes(G, ancestors)
-define_edges(G, ancestors)
+define_parental_edges(G, ancestors)
+# define_relationship_edges(G, ancestors)
 
-labels = nx.get_node_attributes(G, "name")
+print(G.nodes)
 
-nx.draw(G, labels=labels, with_labels=True, font_weight="bold")
+pos = nx.drawing.nx_pydot.graphviz_layout(G, prog="dot")  # twopi for fun
+labels = nx.get_node_attributes(G, "full_name")
+
+nx.draw(G, pos, labels=labels, with_labels=True, font_weight="bold")
 plt.show()
